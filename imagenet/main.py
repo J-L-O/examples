@@ -314,6 +314,10 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         if i % args.print_freq == 0:
             progress.display(i)
 
+    writer.add_scalar('Loss/train', losses.avg, epoch)
+    writer.add_scalar('Acc@1/train', top1.avg, epoch)
+    writer.add_scalar('Acc@5/train', top5.avg, epoch)
+
 
 # helper functions
 def images_to_probs(net, images):
@@ -396,9 +400,9 @@ def validate(val_loader, model, criterion, epoch, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    writer.add_scalar('Loss', losses.avg, epoch)
-    writer.add_scalar('Acc@1', top1.avg, epoch)
-    writer.add_scalar('Acc@5', top5.avg, epoch)
+    writer.add_scalar('Loss/val', losses.avg, epoch)
+    writer.add_scalar('Acc@1/val', top1.avg, epoch)
+    writer.add_scalar('Acc@5/val', top5.avg, epoch)
 
     return top1.avg
 
