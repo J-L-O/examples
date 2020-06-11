@@ -75,13 +75,13 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'N processes per node, which has N GPUs. This is the '
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
-parser.add_argument('--gpu_id', default='0', type=str,
-                    help='id(s) for CUDA_VISIBLE_DEVICES')
+# parser.add_argument('--gpu_id', default='0', type=str,
+#                     help='id(s) for CUDA_VISIBLE_DEVICES')
 
 args = parser.parse_args()
 
-os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'   # see issue #152
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
+# os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'   # see issue #152
+# os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
 
 writer = SummaryWriter()
 
