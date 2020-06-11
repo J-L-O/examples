@@ -18,6 +18,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 from torch.utils.tensorboard import SummaryWriter
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -320,6 +322,19 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     writer.add_scalar('Acc@5/train', top5.avg, epoch)
 
 
+# helper function to show an image
+# (used in the `plot_classes_preds` function below)
+def matplotlib_imshow(img, one_channel=False):
+    if one_channel:
+        img = img.mean(dim=0)
+    img = img / 2 + 0.5     # unnormalize
+    npimg = img.cpu().numpy()
+    if one_channel:
+        plt.imshow(npimg, cmap="Greys")
+    else:
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+
+
 # helper functions
 def images_to_probs(net, images):
     '''
@@ -329,7 +344,7 @@ def images_to_probs(net, images):
     output = net(images)
     # convert output probabilities to predicted class
     _, preds_tensor = torch.max(output, 1)
-    preds = np.squeeze(preds_tensor.numpy())
+    preds = np.squeeze(preds_tensor.cpu().numpy())
     return preds, [F.softmax(el, dim=0)[i].item() for i, el in zip(preds, output)]
 
 
