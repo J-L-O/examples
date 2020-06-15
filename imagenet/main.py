@@ -454,10 +454,10 @@ def evaluate(val_loader, val_dataset, model, criterion, args):
 
             _, preds_tensor = torch.max(output, 1)
             preds = np.squeeze(preds_tensor.cpu().numpy())
-            preds = np.array([val_dataset.class_to_idx[cls] for cls in preds])
+            preds = np.array([val_dataset.classes[idx] for idx in preds])
 
             gt = target.cpu().numpy()
-            gt = np.array([val_dataset.class_to_idx[cls] for cls in gt])
+            gt = np.array([val_dataset.classes[idx] for idx in gt])
 
             if predictions == []:
                 predictions = preds
