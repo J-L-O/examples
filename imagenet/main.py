@@ -451,8 +451,15 @@ def evaluate(val_loader, model, criterion, args):
             output = model(images)
             loss = criterion(output, target)
 
-            predictions.append(output)
-            ground_truth.append(target)
+            if predictions == []:
+                predictions = output.numpy()
+                ground_truth = target.numpy()
+            else:
+                predictions = np.concatenate((predictions, output.numpy()))
+                ground_truth = np.concatenate((ground_truth, target.numpy()))
+
+            # predictions.append(output)
+            # ground_truth.append(target)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
