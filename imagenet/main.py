@@ -485,6 +485,7 @@ def evaluate(val_loader, val_dataset, model, criterion, args):
     confusion = confusion_matrix(ground_truth, predictions)
 
     np.save('confusion_matrix.npy', confusion)
+    np.save('labels.npy', val_dataset.classes)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
