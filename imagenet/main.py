@@ -451,11 +451,14 @@ def evaluate(val_loader, model, criterion, args):
             output = model(images)
             loss = criterion(output, target)
 
+            _, preds_tensor = torch.max(output, 1)
+            preds = np.squeeze(preds_tensor.cpu().numpy())
+
             if predictions == []:
-                predictions = output.cpu().numpy()
+                predictions = preds
                 ground_truth = target.cpu().numpy()
             else:
-                predictions = np.concatenate((predictions, output.cpu().numpy()))
+                predictions = np.concatenate((predictions, preds))
                 ground_truth = np.concatenate((ground_truth, target.cpu().numpy()))
 
             # predictions.append(output)
