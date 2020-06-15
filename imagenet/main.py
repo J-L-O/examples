@@ -233,18 +233,19 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
+    val_dataset = datasets.ImageFolder(valdir, transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=True,
+        ]))
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
-        evaluate(val_loader, model, criterion, args)
+        evaluate(val_loader, val_dataset, model, criterion, args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -424,7 +425,7 @@ def validate(val_loader, model, criterion, epoch, args):
     return top1.avg
 
 
-def evaluate(val_loader, model, criterion, args):
+def evaluate(val_loader, val_dataset, model, criterion, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
@@ -453,13 +454,17 @@ def evaluate(val_loader, model, criterion, args):
 
             _, preds_tensor = torch.max(output, 1)
             preds = np.squeeze(preds_tensor.cpu().numpy())
+            preds = np.array([val_dataset.class_to_idx[cls] for cls in preds])
+
+            gt = target.cpu().numpy()
+            gt = np.array([val_dataset.class_to_idx[cls] for cls in gt])
 
             if predictions == []:
                 predictions = preds
-                ground_truth = target.cpu().numpy()
+                ground_truth = gt
             else:
                 predictions = np.concatenate((predictions, preds))
-                ground_truth = np.concatenate((ground_truth, target.cpu().numpy()))
+                ground_truth = np.concatenate((ground_truth, gt))
 
             # predictions.append(output)
             # ground_truth.append(target)
