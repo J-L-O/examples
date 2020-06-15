@@ -452,11 +452,11 @@ def evaluate(val_loader, model, criterion, args):
             loss = criterion(output, target)
 
             if predictions == []:
-                predictions = output.numpy()
-                ground_truth = target.numpy()
+                predictions = output.cpu().numpy()
+                ground_truth = target.cpu().numpy()
             else:
-                predictions = np.concatenate((predictions, output.numpy()))
-                ground_truth = np.concatenate((ground_truth, target.numpy()))
+                predictions = np.concatenate((predictions, output.cpu().numpy()))
+                ground_truth = np.concatenate((ground_truth, target.cpu().numpy()))
 
             # predictions.append(output)
             # ground_truth.append(target)
