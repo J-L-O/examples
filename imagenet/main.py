@@ -20,6 +20,7 @@ import torchvision.models as models
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
 import numpy as np
 
 
@@ -243,7 +244,7 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
-        validate(val_loader, model, criterion, 0, args)
+        evaluate(val_loader, model, criterion, args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -421,6 +422,54 @@ def validate(val_loader, model, criterion, epoch, args):
     writer.add_scalar('Acc@5/val', top5.avg, epoch)
 
     return top1.avg
+
+
+def evaluate(val_loader, model, criterion, args):
+    batch_time = AverageMeter('Time', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(
+        len(val_loader),
+        [batch_time, losses, top1, top5],
+        prefix='Test: ')
+
+    predictions = []
+    ground_truth = []
+
+    # switch to evaluate mode
+    model.eval()
+
+    with torch.no_grad():
+        end = time.time()
+        for i, (images, target) in enumerate(val_loader):
+            if args.gpu is not None:
+                images = images.cuda(args.gpu, non_blocking=True)
+            target = target.cuda(args.gpu, non_blocking=True)
+
+            # compute output
+            output = model(images)
+            loss = criterion(output, target)
+
+            predictions.append(output)
+            ground_truth.append(target)
+
+            # measure accuracy and record loss
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            losses.update(loss.item(), images.size(0))
+            top1.update(acc1[0], images.size(0))
+            top5.update(acc5[0], images.size(0))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % args.print_freq == 0:
+                progress.display(i)
+
+    confusion = confusion_matrix(ground_truth, predictions)
+
+    np.save('confusion_matrix.npy', confusion)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
