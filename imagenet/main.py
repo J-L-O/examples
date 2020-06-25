@@ -47,7 +47,7 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     help='mini-batch size (default: 256), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=0.001, type=float,
+parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate', dest='lr')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
@@ -183,7 +183,10 @@ def main_worker(gpu, ngpus_per_node, args):
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
 
-    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                               momentum=args.momentum,
+                               weight_decay=args.weight_decay)
+    # optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.weight_decay)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -211,7 +214,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
+    in_valdir = os.path.join(args.data, 'val_in')
+    sin_valdir = os.path.join(args.data, 'val_sin')
+
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -233,19 +238,30 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
-    val_dataset = datasets.ImageFolder(valdir, transforms.Compose([
+    in_val_dataset = datasets.ImageFolder(in_valdir, transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             normalize,
         ]))
 
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=True,
+    in_val_loader = torch.utils.data.DataLoader(
+        in_val_dataset, batch_size=args.batch_size, shuffle=True,
+        num_workers=args.workers, pin_memory=True)
+
+    sin_val_dataset = datasets.ImageFolder(sin_valdir, transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ]))
+
+    sin_val_loader = torch.utils.data.DataLoader(
+        sin_val_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
-        evaluate(val_loader, val_dataset, model, criterion, args)
+        evaluate(in_val_loader, in_val_dataset.classes, model, criterion, args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -257,11 +273,15 @@ def main_worker(gpu, ngpus_per_node, args):
         train(train_loader, model, criterion, optimizer, epoch, args)
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, epoch, args)
+        acc1_in, acc5_in = validate(in_val_loader, 'IN', model, criterion, epoch, args)
+        acc1_sin, acc5_sin = validate(sin_val_loader, 'SIN', model, criterion, epoch, args)
+
+        writer.add_scalar('Acc@1/val_total', (acc1_in + acc1_sin) / 2, epoch)
+        writer.add_scalar('Acc@5/val_total', (acc5_in + acc5_sin) / 2, epoch)
 
         # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
-        best_acc1 = max(acc1, best_acc1)
+        is_best = acc1_sin > best_acc1
+        best_acc1 = max(acc1_sin, best_acc1)
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank % ngpus_per_node == 0):
@@ -372,7 +392,7 @@ def plot_classes_preds(net, images, labels):
     return fig
 
 
-def validate(val_loader, model, criterion, epoch, args):
+def validate(val_loader, val_name, model, criterion, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
@@ -407,7 +427,7 @@ def validate(val_loader, model, criterion, epoch, args):
             end = time.time()
 
             if i == 0:
-                writer.add_figure('predictions vs. actuals',
+                writer.add_figure('predictions vs. actuals on ' + val_name,
                                   plot_classes_preds(model, images, target),
                                   epoch)
 
@@ -418,14 +438,14 @@ def validate(val_loader, model, criterion, epoch, args):
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-    writer.add_scalar('Loss/val', losses.avg, epoch)
-    writer.add_scalar('Acc@1/val', top1.avg, epoch)
-    writer.add_scalar('Acc@5/val', top5.avg, epoch)
+    writer.add_scalar('Loss/val_' + val_name, losses.avg, epoch)
+    writer.add_scalar('Acc@1/val_' + val_name, top1.avg, epoch)
+    writer.add_scalar('Acc@5/val_' + val_name, top5.avg, epoch)
 
-    return top1.avg
+    return top1.avg, top5.avg
 
 
-def evaluate(val_loader, val_dataset, model, criterion, args):
+def evaluate(val_loader, classes, model, criterion, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
@@ -454,10 +474,10 @@ def evaluate(val_loader, val_dataset, model, criterion, args):
 
             _, preds_tensor = torch.max(output, 1)
             preds = np.squeeze(preds_tensor.cpu().numpy())
-            preds = np.array([val_dataset.classes[idx] for idx in preds])
+            preds = np.array([classes[idx] for idx in preds])
 
             gt = target.cpu().numpy()
-            gt = np.array([val_dataset.classes[idx] for idx in gt])
+            gt = np.array([classes[idx] for idx in gt])
 
             if predictions == []:
                 predictions = preds
@@ -485,7 +505,7 @@ def evaluate(val_loader, val_dataset, model, criterion, args):
     confusion = confusion_matrix(ground_truth, predictions)
 
     np.save('confusion_matrix.npy', confusion)
-    np.save('labels.npy', val_dataset.classes)
+    np.save('labels.npy', classes)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
@@ -537,17 +557,17 @@ class ProgressMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, args):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr
+    # lr = args.lr
+    #
+    # if args.epochs == 120:
+    #     if epoch == 100 or epoch == 110:
+    #         lr = args.lr * 0.1
+    #
+    # if args.epochs == 60:
+    #     if epoch == 50 or epoch == 55:
+    #         lr = args.lr * 0.1
 
-    if args.epochs == 120:
-        if epoch == 100 or epoch == 110:
-            lr = args.lr * 0.1
-
-    if args.epochs == 60:
-        if epoch == 50 or epoch == 55:
-            lr = args.lr * 0.1
-
-    # lr = args.lr * (0.1 ** (epoch // 30))
+    lr = args.lr * (0.1 ** (epoch // 15))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
