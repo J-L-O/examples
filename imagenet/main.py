@@ -567,11 +567,11 @@ def adjust_learning_rate(optimizer, epoch, args):
     #     if epoch == 100 or epoch == 110:
     #         lr = args.lr * 0.1
     #
-    # if args.epochs == 60:
-    #     if epoch == 50 or epoch == 55:
-    #         lr = args.lr * 0.1
 
-    lr = args.lr * (0.1 ** (epoch // 15))
+    if args.epochs == 60:
+        lr = args.lr * (0.1 ** (epoch // 20))
+    else:
+        lr = args.lr * (0.1 ** (epoch // 15))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
