@@ -262,6 +262,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     if args.evaluate:
         evaluate(in_val_loader, in_val_dataset.classes, model, criterion, args)
+        evaluate(sin_val_loader, in_val_dataset.classes, model, criterion, args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -501,6 +502,9 @@ def evaluate(val_loader, classes, model, criterion, args):
 
             if i % args.print_freq == 0:
                 progress.display(i)
+
+    print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
+          .format(top1=top1, top5=top5))
 
     confusion = confusion_matrix(ground_truth, predictions)
 
